@@ -34,6 +34,14 @@ function bootstrap() {
   const removeDiacritics = (str) => String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const upperNoDiacritics = (s) => removeDiacritics(s).toUpperCase();
 
+  function currentModelName() {
+    if (state.modelo.value === "otro") {
+      return state.modeloOtro.value.trim() || "Otro";
+    }
+    const t = TEMPLATES[state.modelo.value];
+    return t ? t.name : "";
+  }
+
   // ===== Plantillas =====
   const TEMPLATES = {
     mensuraPosesion: {
@@ -78,6 +86,43 @@ function bootstrap() {
         "Materialización de mojones según normativa.",
         "Plano de mensura y subdivisión.",
         "Gestiones ante Catastro/Municipalidad (tasas no incluidas).",
+      ],
+    },
+    subdivPH: {
+      name: "Subdivisión en Propiedad Horizontal",
+      description:
+        "Consiste en la confección y aprobación (por Municipalidad y Catastro) de un Plano de Propiedad Horizontal en {{lugar}}, delineando las unidades de dominio exclusivo y las superficies de uso común, permitiendo la escrituración individual de cada unidad.",
+      etapas: [
+        {
+          titulo: "1) Investigación y medición",
+          items: [
+            "Investigación y análisis de antecedentes dominiales y cartográficos.",
+            "Planificación de la campaña, y medición completa.",
+            "Confección plano",
+          ],
+          subtotal: 900,
+        },
+        {
+          titulo: "2) Visado plano Colegio de Ingenieros",
+          items: ["Visado plano colegio de Ingenieros."],
+          subtotal: 900,
+        },
+        {
+          titulo: "3) Presentación y visado municipal",
+          items: [
+            "Presentación plano Municipio y visada del mismo.",
+            "Tasa Municipal y presentación en Municipio a cargo cliente",
+          ],
+          subtotal: 900,
+        },
+        {
+          titulo: "4) Presentación en Catastro",
+          items: [
+            "Presentación plano en Catastro (se paga cuando se inicia el trámite)",
+            "Nota de rogación a cargo del cliente (la hace el escribano)",
+          ],
+          subtotal: 900,
+        },
       ],
     },
     bep: {
@@ -154,6 +199,7 @@ function bootstrap() {
     // presupuesto
     fecha: document.getElementById("fecha"),
     modelo: document.getElementById("modelo"),
+    modeloOtro: document.getElementById("modeloOtro"),
     comitente: document.getElementById("comitente"),
     telefono: document.getElementById("telefono"),
     email: document.getElementById("email"),
@@ -185,15 +231,18 @@ function bootstrap() {
     // doc
     doc: document.getElementById("doc"),
     btnDescargar: document.getElementById("btnDescargar"),
+    btnDescargarDoc: document.getElementById("btnDescargarDoc"),
   };
 
   let logoDataURL = ""; // si se sube archivo
+  let lastModelo = "";  // para detectar cambios de modelo
 
   // ===== Init =====
   function initDefaults() {
     state.fecha.value = todayISO();
     state.textoModelo.value = ""; // vacío = usa el texto del modelo
-    setupPago(); // crea hitos por defecto y listeners
+    setupPago(); // crea hitos iniciales y listeners
+    lastModelo = state.modelo.value;
     updateAll();
   }
   initDefaults();
@@ -247,10 +296,24 @@ function bootstrap() {
     return getHitos().reduce((acc, h) => acc + (h.m || 0), 0);
   }
 
+  function clearHitos() {
+    state.pago.hitosContainer.innerHTML = "";
+  }
+
+  function setHitosFromTemplate() {
+    clearHitos();
+    const tpl = TEMPLATES[state.modelo.value];
+    if (tpl && Array.isArray(tpl.etapas) && tpl.etapas.every(et => typeof et.subtotal === "number")) {
+      tpl.etapas.forEach(et => addHito(et.titulo, et.subtotal));
+    } else {
+      addHito("Día de medición", "");
+      addHito("Contra entrega de plano", "");
+    }
+    updatePagoUI();
+  }
+
   function setupPago() {
-    // dos hitos iniciales
-    addHito("Día de medición", "");
-    addHito("Contra entrega de plano", "");
+    setHitosFromTemplate();
     // listeners UI
     state.pago.btnAddHito.addEventListener("click", () => addHito());
     state.pago.modoAvance.addEventListener("change", togglePagoModo);
@@ -299,13 +362,20 @@ function bootstrap() {
 
   // ===== Render =====
   function updateAll() {
+    const isOtro = state.modelo.value === "otro";
+    state.modeloOtro.classList.toggle("hidden", !isOtro);
     const monto = parseFloat(String(state.monto.value).replace(/,/g, ".")) || 0;
     state.montoHint.textContent = `Se mostrará como ${formatCurrency(monto, state.moneda.value)}`;
+    if (state.modelo.value !== lastModelo) {
+      setHitosFromTemplate();
+      lastModelo = state.modelo.value;
+    }
     updatePagoUI();
   }
 
   function buildHeaderHTML() {
     const logoUrl = logoDataURL || normalizeLogoUrl(state.empresa.logo.value);
+    const cross = /^https?:/i.test(logoUrl) ? ' crossorigin="anonymous"' : "";
 
     const razon = state.empresa.razon.value || "";
     const profesional = state.empresa.profesional.value || "";
@@ -314,7 +384,7 @@ function bootstrap() {
       <div class="flex items-start justify-between border-b pb-4">
         <div class="flex items-center gap-4">
           ${logoUrl
-            ? `<img src="${logoUrl}" alt="Logo" crossorigin="anonymous" class="h-16 w-16 object-cover rounded-full ring-2 ring-amber-300">`
+            ? `<img src="${logoUrl}" alt="Logo"${cross} class="h-16 w-16 object-cover rounded-full ring-2 ring-amber-300">`
             : `<div class="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold border border-amber-300">LOGO</div>`
           }
         </div>
@@ -330,7 +400,8 @@ function bootstrap() {
 
   function updatePreview() {
     try {
-      const tpl = TEMPLATES[state.modelo.value];                 // <-- Faltaba
+      const tpl = TEMPLATES[state.modelo.value] || {};
+      const modelName = currentModelName();
       const baseMonto = parseFloat(String(state.monto.value).replace(/,/g, ".")) || 0;
       const total = totalHonorarios(); // base + visado (si está tildado)
 
@@ -344,7 +415,7 @@ function bootstrap() {
       };
       const descripcionBase = state.textoModelo.value.trim()
         ? state.textoModelo.value
-        : tpl.description;
+        : tpl.description || "";
       const descripcion = Mustache.render(descripcionBase, view);
 
       // Leyenda
@@ -366,7 +437,7 @@ function bootstrap() {
         <!-- Único título del trabajo (centrado) -->
         <div class="my-4 py-2 border-y border-gray-200 text-center">
           <span class="text-xl md:text-2xl font-bold">Presupuesto:</span>
-          <span class="text-xl md:text-2xl text-blue-700 underline underline-offset-4">${tpl.name}</span>
+          <span class="text-xl md:text-2xl text-blue-700 underline underline-offset-4">${modelName}</span>
         </div>
 
         <!-- Cuerpo -->
@@ -464,13 +535,14 @@ function bootstrap() {
 
   // ===== Eventos =====
   [
-    state.fecha, state.modelo, state.comitente, state.telefono, state.email,
+    state.fecha, state.modelo, state.modeloOtro, state.comitente, state.telefono, state.email,
     state.ubicacion, state.moneda, state.monto, state.plazo, state.validez,
     state.observaciones,
     state.empresa.razon, state.empresa.profesional, state.empresa.cuit,
     state.empresa.dom, state.empresa.email, state.empresa.tel,
     state.empresa.logo, state.empresa.leyenda, state.textoModelo
   ].forEach(el => el && el.addEventListener("input", updateAll));
+  state.modelo.addEventListener("change", updateAll);
 
   // Nota: radios, botón "Agregar hito", inputs de hitos y visado se enganchan en setupPago().
 
@@ -489,8 +561,8 @@ function bootstrap() {
       // Nombre de archivo: Nombre, Ubicación, TIPO.pdf
       const nombre = safeFilename(state.comitente.value || "Cliente");
       const lugar = safeFilename(state.ubicacion.value || "Lugar");
-      const tipo = upperNoDiacritics(TEMPLATES[state.modelo.value].name);
-      const filename = `${nombre},${tipo}.pdf`;
+      const tipo = upperNoDiacritics(currentModelName());
+      const filename = `${nombre},${lugar},${tipo}.pdf`;
 
       pdf.save(filename);
     } catch (e) {
@@ -498,6 +570,24 @@ function bootstrap() {
       console.error(e);
     }
   });
+
+  if (state.btnDescargarDoc) {
+    state.btnDescargarDoc.addEventListener("click", () => {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${state.doc.innerHTML}</body></html>`;
+      const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const nombre = safeFilename(state.comitente.value || "Cliente");
+      const lugar = safeFilename(state.ubicacion.value || "Lugar");
+      const tipo = upperNoDiacritics(currentModelName());
+      link.href = url;
+      link.download = `${nombre},${lugar},${tipo}.doc`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+  }
 
   // primer render
   updatePreview();

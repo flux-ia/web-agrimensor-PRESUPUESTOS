@@ -22,9 +22,14 @@
   <header class="sticky top-0 z-10 bg-white border-b">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <h1 class="text-xl md:text-2xl font-semibold">Generador de Presupuestos – Agrimensura</h1>
-      <button id="btnDescargar" class="px-4 py-2 rounded-2xl bg-blue-800 text-white font-medium hover:bg-blue-900 shadow">
-        Descargar PDF
-      </button>
+      <div class="flex gap-2">
+        <button id="btnDescargarDoc" class="px-4 py-2 rounded-2xl bg-green-700 text-white font-medium hover:bg-green-800 shadow">
+          Descargar DOC
+        </button>
+        <button id="btnDescargar" class="px-4 py-2 rounded-2xl bg-blue-800 text-white font-medium hover:bg-blue-900 shadow">
+          Descargar PDF
+        </button>
+      </div>
     </div>
   </header>
 
@@ -46,9 +51,12 @@
             <option value="amojonamiento">Amojonamiento</option>
             <option value="relevamientoTopo">Relevamiento Topográfico</option>
             <option value="mensuraSubdiv">Mensura y Subdivisión</option>
+            <option value="subdivPH">Subdivisión en Propiedad Horizontal</option>
             <option value="bep">BEP – Verificación de Estado Parcelario</option>
             <option value="usucapion">Usucapión</option>
+            <option value="otro">Otro</option>
           </select>
+          <input id="modeloOtro" type="text" placeholder="Nombre del modelo" class="mt-2 w-full rounded-xl border p-2 hidden" />
         </div>
 
         <div class="sm:col-span-2">
